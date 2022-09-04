@@ -264,7 +264,7 @@ func main() {
 			fnet.UDPEchoServer("udp-echo", *udpPortFlag, *udpAsyncFlag)
 		}
 		if *grpcPortFlag != disabled {
-			fgrpc.PingServer(*grpcPortFlag, *bincommon.CertFlag, *bincommon.KeyFlag, fgrpc.DefaultHealthServiceName, uint32(*maxStreamsFlag))
+			fgrpc.PingServer(*grpcPortFlag, *bincommon.CertFlag, *bincommon.KeyFlag, fgrpc.DefaultHealthServiceName, uint32(*maxStreamsFlag), bincommon.SharedHTTPOptions())
 		}
 		if *redirectFlag != disabled {
 			fhttp.RedirectToHTTPS(*redirectFlag)

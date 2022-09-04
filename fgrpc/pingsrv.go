@@ -40,11 +40,17 @@ const (
 	Error = "ERROR"
 )
 
-type pingSrv struct{}
+type pingSrv struct{
+	Payload string
+}
 
 func (s *pingSrv) Ping(c context.Context, in *PingMessage) (*PingMessage, error) {
 	log.LogVf("Ping called %+v (ctx %+v)", *in, c)
 	out := *in // copy the input including the payload etc
+	if len(s.Payload) > 0 {
+		log.LogVf("Overriding Ping response payload, size: %v", len(s.Payload))
+		out.Payload = s.Payload
+	}
 	out.Ts = time.Now().UnixNano()
 	if in.DelayNanos > 0 {
 		s := time.Duration(in.DelayNanos)
@@ -59,7 +65,7 @@ func (s *pingSrv) Ping(c context.Context, in *PingMessage) (*PingMessage, error)
 // get a dynamic server). Pass the healthServiceName to use for the
 // grpc service name health check (or pass DefaultHealthServiceName)
 // to be marked as SERVING. Pass maxConcurrentStreams > 0 to set that option.
-func PingServer(port, cert, key, healthServiceName string, maxConcurrentStreams uint32) net.Addr {
+func PingServer(port, cert, key, healthServiceName string, maxConcurrentStreams uint32, httpOpts *fhttp.HTTPOptions) net.Addr {
 	socket, addr := fnet.Listen("grpc '"+healthServiceName+"'", port)
 	if addr == nil {
 		return nil
@@ -84,7 +90,11 @@ func PingServer(port, cert, key, healthServiceName string, maxConcurrentStreams 
 	healthServer.SetServingStatus(healthServiceName, grpc_health_v1.HealthCheckResponse_SERVING)
 	healthServer.SetServingStatus(healthServiceName+"_down", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
 	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
-	RegisterPingServerServer(grpcServer, &pingSrv{})
+	if httpOpts != nil {
+		RegisterPingServerServer(grpcServer, &pingSrv{Payload: httpOpts.PayloadUTF8()})
+	} else {
+		RegisterPingServerServer(grpcServer, &pingSrv{})
+	}
 	go func() {
 		if err := grpcServer.Serve(socket); err != nil {
 			log.Fatalf("failed to start grpc server: %v", err)
@@ -96,7 +106,7 @@ func PingServer(port, cert, key, healthServiceName string, maxConcurrentStreams 
 // PingServerTCP is PingServer() assuming tcp instead of possible unix domain socket port, returns
 // the numeric port.
 func PingServerTCP(port, cert, key, healthServiceName string, maxConcurrentStreams uint32) int {
-	addr := PingServer(port, cert, key, healthServiceName, maxConcurrentStreams)
+	addr := PingServer(port, cert, key, healthServiceName, maxConcurrentStreams, nil)
 	if addr == nil {
 		return -1
 	}
